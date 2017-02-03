@@ -17,18 +17,59 @@ namespace
 
 namespace CNTK
 {
-    Trainer::Trainer(const FunctionPtr& model, const FunctionPtr& lossFunction, const std::vector<LearnerPtr>& parameterLearners)
-        : Trainer(model, lossFunction, nullptr, parameterLearners)
+    struct Trainer::ProgressAccumulators
+    {
+        ProgressAccumulators()
+            : m_numSamples(0),
+            m_loss(std::make_shared<Value>(nullptr)),
+            m_evalCriterion(std::make_shared<Value>(nullptr)) {}
+
+        void Update(const DeviceDescriptor& computeDevice, size_t numSamples,
+                    const ValuePtr& loss, const ValuePtr& evalCriterion)
+        {
+            if (numSamples == 0) return;
+
+            bool createdLoss = (loss) ?
+                Utils::CopyOrAddValue(computeDevice, m_loss, loss) : false;
+            bool createdEval = (evalCriterion) ?
+                Utils::CopyOrAddValue(computeDevice, m_evalCriterion, evalCriterion) : false;
+
+            if ((createdLoss || createdEval) && m_numSamples != 0)
+                RuntimeError("Accumulation values are created when accumulated num samples not zero");
+
+            m_numSamples += numSamples;
+        }
+
+        void Reset()
+        {
+            Utils::ResetValueToZero(m_loss);
+            Utils::ResetValueToZero(m_evalCriterion);
+            m_numSamples = 0;
+        }
+
+        size_t   m_numSamples;
+        ValuePtr m_loss;
+        ValuePtr m_evalCriterion;
+    };
+
+    Trainer::Trainer(const FunctionPtr& model, const FunctionPtr& lossFunction,
+                     const std::vector<LearnerPtr>& parameterLearners,
+                     const std::vector<ProgressWriterPtr>& progressWriters)
+        : Trainer(model, lossFunction, nullptr, parameterLearners, progressWriters)
     {}
 
-    Trainer::Trainer(const FunctionPtr& model, const FunctionPtr& lossFunction, const FunctionPtr& evaluationFunction, const std::vector<LearnerPtr>& parameterLearners)
+    Trainer::Trainer(const FunctionPtr& model, const FunctionPtr& lossFunction, const FunctionPtr& evaluationFunction,
+                     const std::vector<LearnerPtr>& parameterLearners,
+                    const std::vector<ProgressWriterPtr>& progressWriters)
         : m_model(model),
           m_lossFunction(lossFunction),
           m_evaluationFunction(evaluationFunction),
           m_parameterLearners(std::make_shared<Learners>(parameterLearners)),
           m_prevMinibatchNumSamples(1),
           m_distributed(false),
-          m_accumulatedNumSamples(0)
+          m_trainingProgress(std::make_unique<ProgressAccumulators>()),
+          m_evalProgress(std::make_unique<ProgressAccumulators>()),
+          m_progressWriters(progressWriters)
     {
         // By default we set the number of threads to hardware concurrency.
         if (!Internal::MaxNumCPUThreadsSet())
@@ -96,35 +137,6 @@ namespace CNTK
         m_distributed = m_parameterLearners->IsDistributed();
     }
 
-    static double GetScalarValue(const ValuePtr& value)
-    {
-        if (value->Mask())
-            LogicError("Scalar Value object cannot have an associated mask");
-
-        auto scalarData = value->Data();
-        if (scalarData->Shape().TotalSize() != 1)
-            LogicError("Scalar Value object's has a size > 1");
-
-        double scalar = std::numeric_limits<double>::quiet_NaN();
-        NDArrayViewPtr cpuData;
-        if (scalarData->Device() == DeviceDescriptor::CPUDevice())
-            cpuData = scalarData;
-        else
-        {
-            cpuData = std::make_shared<NDArrayView>(scalarData->GetDataType(), scalarData->Shape(), CNTK::DeviceDescriptor::CPUDevice());
-            cpuData->CopyFrom(*scalarData);
-        }
-
-        if (scalarData->GetDataType() == DataType::Float)
-            scalar = *(cpuData->DataBuffer<float>());
-        else if (scalarData->GetDataType() == DataType::Double)
-            scalar = *(cpuData->DataBuffer<double>());
-        else
-            LogicError("Unsupported DataType of training loss value");
-
-        return scalar;
-    }
-
     static size_t GetSampleCount(const Variable& var, const ValuePtr& value)
     {
         auto valueDataShape = value->Shape();
@@ -161,13 +173,6 @@ namespace CNTK
 
     double Trainer::TestMinibatch(const std::unordered_map<Variable, ValuePtr>& arguments, const DeviceDescriptor& computeDevice /*= DeviceDescriptor::UseDefaultDevice()*/)
     {
-        size_t sampleCount = 0;
-        auto accumulatedError = TestMinibatch(arguments, computeDevice, sampleCount);
-        return accumulatedError / sampleCount;
-    }
-
-    double Trainer::TestMinibatch(const std::unordered_map<Variable, ValuePtr>& arguments, const DeviceDescriptor& computeDevice, size_t& sampleCount)
-    {
         if (!m_aggregatedEvaluationFunction)
             InvalidArgument("Trainer::TestMinibatch: Cannot test when no evaluation function was specified during 'this' trainer's construction");
 
@@ -175,8 +180,16 @@ namespace CNTK
         std::unordered_map<Variable, ValuePtr> outputs = { { m_aggregatedEvaluationFunction, nullptr }, { m_testSampleCountVar, nullptr } };
 
         m_combinedTrainingFunction->Forward(arguments, outputs, computeDevice);
-        sampleCount = GetSampleCount(m_testSampleCountVar, outputs[m_testSampleCountVar]);
-        return GetScalarValue(outputs[m_aggregatedEvaluationFunction]);
+        const ValuePtr& aggregateEvalCriterionValue = outputs[m_aggregatedEvaluationFunction];
+        m_prevTestMinibatchNumSamples = GetSampleCount(m_testSampleCountVar, outputs[m_testSampleCountVar]);
+
+        m_evalProgress->Update(computeDevice, m_prevTestMinibatchNumSamples, nullptr, aggregateEvalCriterionValue);
+        UpdateEvaluationProgress(m_progressWriters);
+
+        // TODO: it is not optimal to return average evaluation after each minibatch, since it potentially requires a
+        // roundtrip to GPU. A better approach would be to have a separate method to return the average evaluation on
+        // demand, as done for training. However, removing the below return is an API breaking change.
+        return (Utils::GetScalarValue(aggregateEvalCriterionValue) / m_prevTestMinibatchNumSamples);
     }
 
     bool Trainer::TrainMinibatch(const std::unordered_map<Variable, MinibatchData>& arguments, const DeviceDescriptor& computeDevice /*= DeviceDescriptor::UseDefaultDevice()*/)
@@ -218,7 +231,11 @@ namespace CNTK
         std::unordered_map<Variable, ValuePtr> parameterGradients;
         ExecuteForwardBackward(arguments, outputsToFetch, computeDevice, parameterGradients);
 
-        AccumulatePrevMinibatch(computeDevice);
+        m_trainingProgress->Update(computeDevice, m_prevMinibatchNumSamples, m_prevMinibatchAggregateTrainingLossValue,
+                                   m_prevMinibatchAggregateEvalCriterionValue);
+
+        // TODO: exclude updating progress writers from profiling?
+        UpdateTrainingProgress(m_progressWriters);
 
         auto profWeights = Microsoft::MSR::CNTK::ScopeProfile(Microsoft::MSR::CNTK::profilerEvtMainWeights);
 
@@ -267,84 +284,49 @@ namespace CNTK
         }
 
         // must accumulate after aggregation
-        AccumulatePrevMinibatch(computeDevice);
+        m_trainingProgress->Update(computeDevice, m_prevMinibatchNumSamples, m_prevMinibatchAggregateTrainingLossValue,
+                                   m_prevMinibatchAggregateEvalCriterionValue);
 
+        // TODO: exclude updating progress from profiling?
+        UpdateTrainingProgress(m_progressWriters);
         return updated;
     }
 
-    double Trainer::AccumulatedLossAverage() const
+    void Trainer::UpdateTrainingProgress(const std::vector<ProgressWriterPtr>& progressWriters)
     {
-        return m_accumulatedNumSamples == 0 ? 0 : (GetScalarValue(m_accumulatedTrainingLossValue) / m_accumulatedNumSamples);
-    }
-
-    double Trainer::AccumulatedEvaluationAverage() const
-    {
-        if (!m_evaluationFunction)
-            InvalidArgument("Trainer::AccumulatedEvaluationAverage: Cannot get evaluation criterion value when no evaluation function was specified during 'this' trainer's construction");
-
-        return m_accumulatedNumSamples == 0 ? 0 : (GetScalarValue(m_accumulatedEvalCriterionValue) / m_accumulatedNumSamples);
-    }
-
-    static void ResetToZero(ValuePtr& v)
-    {
-        if (v == nullptr) return;
-
-        if (v->GetDataType() == DataType::Float)
-            v->Data()->SetValue(0.0f);
-        else
-            v->Data()->SetValue(0.0);
-    }
-
-    void Trainer::ResetAccumulation()
-    {
-        ResetToZero(m_accumulatedTrainingLossValue);
-        ResetToZero(m_accumulatedEvalCriterionValue);
-        m_accumulatedNumSamples = 0;
-    }
-
-    void Trainer::AccumulatePrevMinibatch(const DeviceDescriptor& computeDevice)
-    {
-        if (m_prevMinibatchNumSamples == 0) return;
-
-        auto CreateIfDifferent_Add = [computeDevice](ValuePtr& accumulated, const ValuePtr& value) -> bool
+        for (auto& progressWriter : progressWriters)
         {
-            bool created = false;
+            progressWriter->UpdateTraining(m_prevMinibatchNumSamples,
+                                           m_trainingProgress->m_loss, m_trainingProgress->m_evalCriterion);
+        }
+    }
 
-            if (!accumulated ||
-                accumulated->GetDataType() != value->GetDataType() ||
-                accumulated->Shape() != value->Shape() ||
-                accumulated->Device() != computeDevice ||
-                accumulated->Mask() != value->Mask())
-            {
-                created = true;
-                accumulated = MakeSharedObject<Value>(
-                    MakeSharedObject<NDArrayView>(
-                        value->GetDataType(),
-                        value->Shape(),
-                        computeDevice),
-                    value->Mask());
+    void Trainer::SummarizeTrainingProgress(const std::vector<ProgressWriterPtr>& progressWriters)
+    {
+        for (auto& progressWriter : progressWriters)
+        {
+            progressWriter->WriteTrainingSummary(m_trainingProgress->m_loss, m_trainingProgress->m_evalCriterion);
+        }
 
-                ResetToZero(accumulated);
-            }
+        m_trainingProgress->Reset();
+    }
 
-            if (accumulated->GetDataType() == DataType::Float)
-                accumulated->Data()->GetWritableTensorView<float>()->AddCopyOf(*value->Data()->GetTensorView<float>());
-            else
-                accumulated->Data()->GetWritableTensorView<double>()->AddCopyOf(*value->Data()->GetTensorView<double>());
+    void Trainer::UpdateEvaluationProgress(const std::vector<ProgressWriterPtr>& progressWriters)
+    {
+        for (auto& progressWriter : progressWriters)
+        {
+            progressWriter->UpdateEvaluation(m_prevTestMinibatchNumSamples, m_evalProgress->m_evalCriterion);
+        }
+    }
 
-            return created;
-        };
+    void Trainer::SummarizeEvaluationProgress(const std::vector<ProgressWriterPtr>& progressWriters)
+    {
+        for (auto& progressWriter : progressWriters)
+        {
+            progressWriter->WriteEvaluationSummary(m_evalProgress->m_evalCriterion);
+        }
 
-        bool createdLoss = CreateIfDifferent_Add(m_accumulatedTrainingLossValue, m_prevMinibatchAggregateTrainingLossValue);
-        bool createdEval =
-            m_aggregatedEvaluationFunction ?
-            CreateIfDifferent_Add(m_accumulatedEvalCriterionValue, m_prevMinibatchAggregateEvalCriterionValue) :
-            false;
-
-        if ((createdLoss || createdEval) && m_accumulatedNumSamples != 0)
-            RuntimeError("Accumulation values are created when accumulated num samples not zero");
-
-        m_accumulatedNumSamples += m_prevMinibatchNumSamples;
+        m_evalProgress->Reset();
     }
 
     void Trainer::ExecuteForwardBackward(const std::unordered_map<Variable, ValuePtr>& arguments, std::unordered_map<Variable, ValuePtr>& outputsToFetch, const DeviceDescriptor& computeDevice, std::unordered_map<Variable, ValuePtr>& parameterGradients)
@@ -476,7 +458,7 @@ namespace CNTK
         if (m_prevMinibatchNumSamples == 0)
             RuntimeError("There was no preceeding call to TrainMinibatch or the minibatch was empty.");
 
-        return (GetScalarValue(m_prevMinibatchAggregateTrainingLossValue) / m_prevMinibatchNumSamples);
+        return (Utils::GetScalarValue(m_prevMinibatchAggregateTrainingLossValue) / m_prevMinibatchNumSamples);
     }
 
     double Trainer::PreviousMinibatchEvaluationAverage() const
@@ -487,7 +469,7 @@ namespace CNTK
         if (m_prevMinibatchNumSamples == 0)
             RuntimeError("There was no preceeding call to TrainMinibatch or the minibatch was empty.");
 
-        return (GetScalarValue(m_prevMinibatchAggregateEvalCriterionValue) / m_prevMinibatchNumSamples);
+        return (Utils::GetScalarValue(m_prevMinibatchAggregateEvalCriterionValue) / m_prevMinibatchNumSamples);
     }
 
     const std::vector<LearnerPtr>& Trainer::ParameterLearners() const
@@ -500,13 +482,15 @@ namespace CNTK
         return m_parameterLearners->ParameterLearners().front()->TotalNumberOfSamplesSeen();
     }
 
-    TrainerPtr CreateTrainer(const FunctionPtr& model, const FunctionPtr& lossFunction, const std::vector<LearnerPtr>& parameterLearners)
+    TrainerPtr CreateTrainer(const FunctionPtr& model, const FunctionPtr& lossFunction, const std::vector<LearnerPtr>& parameterLearners,
+                             const std::vector<ProgressWriterPtr>& progressWriters)
     {
-        return MakeSharedObject<Trainer>(model, lossFunction, parameterLearners);
+        return MakeSharedObject<Trainer>(model, lossFunction, parameterLearners, progressWriters);
     }
 
-    TrainerPtr CreateTrainer(const FunctionPtr& model, const FunctionPtr& lossFunction, const FunctionPtr& evaluationFunction, const std::vector<LearnerPtr>& parameterLearners)
+    TrainerPtr CreateTrainer(const FunctionPtr& model, const FunctionPtr& lossFunction, const FunctionPtr& evaluationFunction, const std::vector<LearnerPtr>& parameterLearners,
+                             const std::vector<ProgressWriterPtr>& progressWriters)
     {
-        return MakeSharedObject<Trainer>(model, lossFunction, evaluationFunction, parameterLearners);
+        return MakeSharedObject<Trainer>(model, lossFunction, evaluationFunction, parameterLearners, progressWriters);
     }
 }

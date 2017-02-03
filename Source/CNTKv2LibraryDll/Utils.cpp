@@ -776,6 +776,79 @@ namespace CNTK
 
         return GetValueObjectFromCNTKImplMatrixAndMBLayout(var.Shape(), matrix, layout, readOnly);
     }
+
+    bool Utils::CopyOrAddValue(const DeviceDescriptor& computeDevice, ValuePtr& value, const ValuePtr& other)
+    {
+        if (!other)
+        {
+            return false;
+        }
+
+        bool copied = false;
+        if (!value->Data() ||
+            value->GetDataType() != other->GetDataType() ||
+            value->Shape() != other->Shape() ||
+            value->Device() != computeDevice ||
+            value->Mask() != other->Mask())
+        {
+            copied = true;
+            value = MakeSharedObject<Value>(
+                MakeSharedObject<NDArrayView>(other->GetDataType(), other->Shape(), computeDevice),
+                other->Mask());
+            ResetValueToZero(value);
+        }
+
+        if (other->GetDataType() == DataType::Float)
+        {
+            value->Data()->GetWritableTensorView<float>()->AddCopyOf(*other->Data()->GetTensorView<float>());
+        }
+        else
+        {
+            value->Data()->GetWritableTensorView<double>()->AddCopyOf(*other->Data()->GetTensorView<double>());
+        }
+
+        return copied;
+    }
+
+    void Utils::ResetValueToZero(ValuePtr& value)
+    {
+        if (value->Data() == nullptr) return;
+
+        if (value->GetDataType() == DataType::Float)
+            value->Data()->SetValue(0.0f);
+        else
+            value->Data()->SetValue(0.0);
+    }
+
+    double Utils::GetScalarValue(const ValuePtr& value)
+    {
+        if (value->Mask())
+            LogicError("Scalar Value object cannot have an associated mask");
+
+        auto scalarData = value->Data();
+        if (scalarData->Shape().TotalSize() != 1)
+            LogicError("Scalar Value object's has a size > 1");
+
+        double scalar = std::numeric_limits<double>::quiet_NaN();
+        NDArrayViewPtr cpuData;
+        if (scalarData->Device() == DeviceDescriptor::CPUDevice())
+            cpuData = scalarData;
+        else
+        {
+            cpuData = std::make_shared<NDArrayView>(scalarData->GetDataType(), scalarData->Shape(), CNTK::DeviceDescriptor::CPUDevice());
+            cpuData->CopyFrom(*scalarData);
+        }
+
+        if (scalarData->GetDataType() == DataType::Float)
+            scalar = *(cpuData->DataBuffer<float>());
+        else if (scalarData->GetDataType() == DataType::Double)
+            scalar = *(cpuData->DataBuffer<double>());
+        else
+            LogicError("Unsupported DataType of training loss value");
+
+        return scalar;
+    }
+
     template void DictionaryValue::AllocateDataPtr<NDShape>(const NDShape& value);
     template void DictionaryValue::AllocateDataPtr<Axis>(const Axis& value);
     template void DictionaryValue::AllocateDataPtr<vector<DictionaryValue>>(const vector<DictionaryValue>& value);

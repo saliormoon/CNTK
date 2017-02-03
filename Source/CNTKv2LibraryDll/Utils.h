@@ -566,6 +566,13 @@ namespace CNTK
 
         template <typename ElementType>
         static ValuePtr GetValueObjectFromCNTKImplMatrixAndMBLayout(const Variable& var, const Microsoft::MSR::CNTK::Matrix<ElementType>& matrix, const Microsoft::MSR::CNTK::MBLayoutPtr& layout, bool readOnly = true);
+
+        // TODO: move these to Value class?
+        static bool CopyOrAddValue(const DeviceDescriptor& computeDevice, ValuePtr& value, const ValuePtr& other);
+
+        static void ResetValueToZero(ValuePtr& value);
+
+        static double GetScalarValue(const ValuePtr& value);
     };
 
     template <typename NamedType>

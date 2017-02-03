@@ -4162,34 +4162,35 @@ namespace CNTK
         size_t PreviousMinibatchSampleCount() const { return m_prevMinibatchNumSamples; }
 
         ///
-        /// Returns the average training loss per sample for accumulated training loss.
-        ///
-        CNTK_API double AccumulatedLossAverage() const;
-
-        ///
-        /// Returns the average evaluation criterion value per sample for accumulated eval criterion.
-        ///
-        CNTK_API double AccumulatedEvaluationAverage() const;
-
-        ///
-        /// Returns the number of samples accumulated
-        ///
-        size_t AccumulatedSampleCount() const { return m_accumulatedNumSamples; }
-
-        ///
-        /// Reset the accumulation
-        ///
-        CNTK_API void ResetAccumulation();
-
-        ///
         /// Learners associated with this Trainer for updating the model's parameters using computed gradients.
         ///
         CNTK_API const std::vector<LearnerPtr>& ParameterLearners() const;
 
         ///
-        /// Total number of samples seen from the beginnign of the training.
+        /// Total number of samples seen from the begining of the training.
         ///
         CNTK_API size_t TotalNumberOfSamplesSeen() const;
+
+        ///
+        /// Returns the number of samples in the last test minibatch.
+        ///
+        size_t PreviousTestMinibatchSampleCount() const { return m_prevTestMinibatchNumSamples; }
+
+        ///
+        /// Writes the summary of training progress and resets the accumulators.
+        ///
+        CNTK_API void SummarizeTrainingProgress()
+        {
+            SummarizeTrainingProgress(m_progressWriters);
+        }
+
+        ///
+        /// Writes the summary of evaluation progress and resets the accumulators.
+        ///
+        CNTK_API void SummarizeEvaluationProgress()
+        {
+            SummarizeEvaluationProgress(m_progressWriters);
+        }
 
     private:
         template <typename T1, typename ...CtorArgTypes>
@@ -4197,12 +4198,10 @@ namespace CNTK
 
         friend class TrainingSession;
 
-        // Returns aggregated evaluation criterion value and sample count.
-        // TODO: change the public interface to return pair(error, sampleCount) instead of average error.
-        double TestMinibatch(const std::unordered_map<Variable, ValuePtr>& arguments, const DeviceDescriptor& computeDevice, size_t& sampleCount);
-
-        Trainer(const FunctionPtr& model, const FunctionPtr& lossFunction, const std::vector<LearnerPtr>& parameterLearners);
-        Trainer(const FunctionPtr& model, const FunctionPtr& lossFunction, const FunctionPtr& evaluationFunction, const std::vector<LearnerPtr>& parameterLearners);
+        Trainer(const FunctionPtr& model, const FunctionPtr& lossFunction, const std::vector<LearnerPtr>& parameterLearners,
+                const std::vector<ProgressWriterPtr>& progressWriters = {});
+        Trainer(const FunctionPtr& model, const FunctionPtr& lossFunction, const FunctionPtr& evaluationFunction, const std::vector<LearnerPtr>& parameterLearners,
+                const std::vector<ProgressWriterPtr>& progressWriters = {});
 
         void ExecuteForwardBackward(
             const std::unordered_map<Variable, ValuePtr>& arguments,
@@ -4215,7 +4214,12 @@ namespace CNTK
 
         void Save(const std::wstring& modelFilePath, const std::vector<DictionaryValue>& learnerState, const Dictionary& externalState);
 
-        void AccumulatePrevMinibatch(const DeviceDescriptor& computeDevice);
+        void UpdateTrainingProgress(const std::vector<ProgressWriterPtr>& progressWriters);
+        void SummarizeTrainingProgress(const std::vector<ProgressWriterPtr>& progressWriters);
+
+        void UpdateEvaluationProgress(const std::vector<ProgressWriterPtr>& progressWriters);
+        void SummarizeEvaluationProgress(const std::vector<ProgressWriterPtr>& progressWriters);
+        const std::vector<ProgressWriterPtr>& ProgressWriters() const { return m_progressWriters; }
 
         FunctionPtr m_combinedTrainingFunction;
         FunctionPtr m_model;
@@ -4235,23 +4239,30 @@ namespace CNTK
         ValuePtr m_prevMinibatchAggregateTrainingLossValue;
         ValuePtr m_prevMinibatchAggregateEvalCriterionValue;
 
-        size_t   m_accumulatedNumSamples;
-        ValuePtr m_accumulatedTrainingLossValue;
-        ValuePtr m_accumulatedEvalCriterionValue;
+        size_t   m_prevTestMinibatchNumSamples;
+
+        struct ProgressAccumulators;
+        typedef std::unique_ptr<ProgressAccumulators> ProgressAccumulatorsPtr;
+        ProgressAccumulatorsPtr m_trainingProgress;
+        ProgressAccumulatorsPtr m_evalProgress;
+
+        std::vector<ProgressWriterPtr> m_progressWriters;
     };
 
     ///
     /// Construct a Trainer to train the specified 'model' with the specified 'trainingLoss' Variable as the training criterion
     /// and using the specified set of 'parameterLearners' for updating the model's parameters using computed gradients.
     ///
-    CNTK_API TrainerPtr CreateTrainer(const FunctionPtr& model, const FunctionPtr& lossFunction, const std::vector<LearnerPtr>& parameterLearners);
+    CNTK_API TrainerPtr CreateTrainer(const FunctionPtr& model, const FunctionPtr& lossFunction, const std::vector<LearnerPtr>& parameterLearners,
+                                      const std::vector<ProgressWriterPtr>& progressWriters = {});
 
     ///
     /// Construct a Trainer to train the specified 'model' with the specified 'trainingLoss' as the training criterion,
     /// the specified 'evaluationFunction' as the criterion for evaluating the trained model's quality, and using the specified set
     /// of 'parameterLearners' for updating the model's parameters using computed gradients.
     ///
-    CNTK_API TrainerPtr CreateTrainer(const FunctionPtr& model, const FunctionPtr& lossFunction, const FunctionPtr& evaluationFunction, const std::vector<LearnerPtr>& parameterLearners);
+    CNTK_API TrainerPtr CreateTrainer(const FunctionPtr& model, const FunctionPtr& lossFunction, const FunctionPtr& evaluationFunction, const std::vector<LearnerPtr>& parameterLearners,
+                                      const std::vector<ProgressWriterPtr>& progressWriters = {});
 }
 
 namespace std {
@@ -4681,7 +4692,8 @@ namespace CNTK
             bool restoreFromCheckpointIfExists = true,
             bool keepExistingCheckpoints = false,
             size_t maxNumberOfTrainingSamples = std::numeric_limits<size_t>::max(),
-            size_t progressFrequency = std::numeric_limits<size_t>::max());
+            size_t progressFrequency = std::numeric_limits<size_t>::max(),
+            const std::vector<ProgressWriterPtr>& progressWriters = {});
 
         ///
         /// Runs the session.
@@ -4733,12 +4745,7 @@ namespace CNTK
         ///
         /// Optionally overridable callback that is invoked after each cross validation.
         ///
-        CNTK_API virtual void OnCrossValidationEnd(size_t /*validationIndex*/, double /*averageError*/, size_t /*numberOfSamples*/, size_t /*numberOfMinibatches*/) {};
-
-        ///
-        /// Optionally overridable callback that is invoked with progress frequency.
-        ///
-        CNTK_API virtual void OnProgress(size_t /*index*/) {};
+        CNTK_API virtual void OnCrossValidationEnd(size_t /*validationIndex*/) {};
 
     protected:
         ///
@@ -4784,6 +4791,7 @@ namespace CNTK
         const MinibatchSizeSchedule m_crossValidationSchedule;
 
         std::vector<PeriodicAction> m_actions;
+        std::vector<ProgressWriterPtr> m_progressWriters;
     };
 
     ///
@@ -4802,10 +4810,96 @@ namespace CNTK
         bool restoreFromCheckpointIfExists = true,
         bool keepExistingCheckpoints = false,
         size_t maxNumberOfTrainingSamples = std::numeric_limits<size_t>::max(),
-        size_t progressFrequency = std::numeric_limits<size_t>::max());
-
+        size_t progressFrequency = std::numeric_limits<size_t>::max(),
+        const std::vector<ProgressWriterPtr>& progressWriters = {});
 
     CNTK_API void PrintBuiltInfo();
+
+    ///
+    /// Base class for all classes that want to record training/evaluation progress.
+    ///
+    class ProgressWriter
+    {
+        friend class Trainer;
+
+    public:
+        ///
+        /// Constructor.
+        ///
+        /// The frequency arguments control a schedule on which the training/evaluation progress updates are written.
+        /// The frequency value of 0 specifies geometric schedule, i.e. write progress after 1, 2, 4, 8, 16... updates.
+        /// The frequency value other than zero specifies arithmetic schedule, i.e. write progress after each 
+        /// 'frequency' updates.
+        ///
+        /// The firsUpdatesToWrite arguments only apply on arithemetic schedule. If specified, the first
+        /// 'firstUpdatesToWrite' updates will be written explicitly before using an arithmetic schedule.
+        ///
+        CNTK_API ProgressWriter(size_t trainingUpdateWriteFrequency, size_t trainingFirstUpdatesToWrite,
+                                size_t evaluationUpdateWriteFrequency, size_t evaluationFirstUpdatesToWrite);
+
+        ///
+        /// Destructor.
+        ///
+        CNTK_API virtual ~ProgressWriter();
+
+        ///
+        /// Actually outputs information about the update in training progress. Overridable in derived classes.
+        ///
+        CNTK_API virtual void OnWriteTrainingUpdate(const std::pair<size_t, size_t>& /*samples*/,
+                                                    const std::pair<size_t, size_t>& /*updates*/,
+                                                    const std::pair<double, double>& /*aggregateLoss*/,
+                                                    const std::pair<double, double>& /*aggregateMetric*/) {};
+
+        ///
+        /// Actually outputs information about the update in evaluation progress.  Overridable in derived classes.
+        ///
+        CNTK_API virtual void OnWriteEvaluationUpdate(const std::pair<size_t, size_t>& /*samples*/,
+                                                      const std::pair<size_t, size_t>& /*updates*/,
+                                                      const std::pair<double, double>& /*aggregateMetric*/) {};
+
+        ///
+        /// Actually outputs information about the summary of training progress.  Overridable in derived classes.
+        ///
+        CNTK_API virtual void OnWriteTrainingSummary(size_t /*samples*/, size_t /*updates*/, size_t /*summaries*/,
+                                                     double /*aggregateLoss*/, double /*aggregateMetric*/,
+                                                     size_t /*elapsedMilliseconds*/) {};
+
+        ///
+        /// Actually outputs information about the summary of evaluation progress.  Overridable in derived classes.
+        ///
+        CNTK_API virtual void OnWriteEvaluationSummary(size_t /*samples*/, size_t /*updates*/, size_t /*summaries*/,
+                                                       double /*aggregateMetric*/, size_t /*elapsedMilliseconds*/) {};
+
+        ///
+        /// Returns the total number of training progress updates received by the progress writer.
+        ///
+        CNTK_API size_t TotalTrainingUpdates() const;
+
+        ///
+        /// Returns the total number of evaluation progress updates received by the progress writer.
+        ///
+        CNTK_API size_t TotalEvaluationUpdates() const;
+
+    private:
+        // Disallow copy and move construction and assignment
+        ProgressWriter(const ProgressWriter&) = delete; ProgressWriter(ProgressWriter&&) = delete; ProgressWriter& operator=(const ProgressWriter&) = delete; ProgressWriter& operator=(ProgressWriter&&) = delete;
+
+        // Updates the writer with the accumulated loss/metric since the start of training.
+        void UpdateTraining(size_t numSamples, const ValuePtr& accumulatedLoss, const ValuePtr& accumulatedMetric);
+
+        // Updates the writer with the accumulated metric since the start of evaluation.
+        void UpdateEvaluation(size_t numSamples, const ValuePtr& accumulatedMetric);
+
+        // Writes a summary of training progress since the last call to this function.
+        void WriteTrainingSummary(const ValuePtr& accumulatedLoss, const ValuePtr& accumulatedMetric);
+
+        // Writes a summary of evaluation progress since the last call to this function.
+        void WriteEvaluationSummary(const ValuePtr& accumulatedMetric);
+
+        class Impl;
+        std::unique_ptr<Impl> m_training;
+        std::unique_ptr<Impl> m_eval;
+    };
 }
 
 
