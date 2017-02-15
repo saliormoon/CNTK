@@ -369,3 +369,34 @@ def test_session_cv_callback_3_times(tmpdir, device_id):
 
     assert counter == [3]
 
+def test_session_cv_callback_with_cross_validation_3_times(tmpdir, device_id):
+    device=cntk_device(device_id)
+    t = trainer(device)
+    mbs = mb_source(tmpdir, "training", epoch_size=INFINITELY_REPEAT)
+    cv_mbs = mb_source(tmpdir, "cv")
+
+    input_map = {
+        t['input'] : mbs.streams.features,
+        t['label'] : mbs.streams.labels
+    }
+
+    def cv_callback(index, average_error, num_samples, num_mb):
+        initial_position = cv_mbs.current_position
+        total_error = 0
+        while True:
+           mb = cv_mbs.next_minibatch(2, input_map=input_map)
+           if not mb: break
+           mb_error = t['trainer'].test_minibatch(mb, device)
+           total_error += mb_error * mb[t['label']].num_samples
+
+        total_samples = 25 # Please see input data
+        assert((total_error * 100) / total_samples == 92)
+        cv_mbs.set_current_position(initial_position)
+
+    session = training_session(mbs, t['trainer'], minibatch_size_schedule(4), 
+        model_inputs_to_mb_source_mapping=input_map, 
+        max_training_samples=60, cv_frequency=20,
+        cv_callback=cv_callback)
+    session.train(device)
+
+    assert(t['trainer'].total_number_of_samples_seen == 61)
