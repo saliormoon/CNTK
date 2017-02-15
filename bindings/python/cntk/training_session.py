@@ -70,6 +70,12 @@ class TrainingSession(cntk_py.TrainingSession):
         if progress_frequency is None:
             progress_frequency = sys.maxsize
 
+        if cv_source is None and cv_callback is None:
+            if cv_frequency is not None and cv_frequency != 0:
+                raise ValueError(
+                    "Cross validation frequency cannot be specified without cross validation minibatch source or callback.")
+            cv_frequency = 0
+
         if cv_frequency is None:
             cv_frequency = sys.maxsize
 
