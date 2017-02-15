@@ -120,15 +120,16 @@ namespace CNTK
                     // enable profiler after the first checkpoint
                     // This has effect only if the profiler is globally enabled by StartProfiler()
                     Microsoft::MSR::CNTK::ProfilerEnable(true);
+                    return true;
                 } });
 
         if(crossValidationFrequencyInSamples != 0)
             m_actions.push_back({ crossValidationFrequencyInSamples, 0, 0,
-                [this](size_t currentIndex, const DeviceDescriptor& d) { CrossValidate(currentIndex, d); } });
+                [this](size_t currentIndex, const DeviceDescriptor& d) { return CrossValidate(currentIndex, d); } });
 
         if (progressFrequencyInSamples != 0)
             m_actions.push_back({ progressFrequencyInSamples, 0, 0,
-                [this](size_t currentIndex, const DeviceDescriptor&) { ReportProgress(currentIndex); } });
+                [this](size_t currentIndex, const DeviceDescriptor&) { ReportProgress(currentIndex); return true; } });
     }
 
     void TrainingSession::Train(const DeviceDescriptor& computeDevice)
@@ -145,12 +146,14 @@ namespace CNTK
         }
 
         // Main train loop.
+        bool earlyExit = false;
         while (shouldTrain)
         {
             // Get next minibatch.
-            size_t samplesLeft = m_maxNumberOfSamples > m_trainer->TotalNumberOfSamplesSeen()
-                ? m_maxNumberOfSamples - m_trainer->TotalNumberOfSamplesSeen()
-                : 0;
+            size_t samplesLeft = earlyExit || m_maxNumberOfSamples <= m_trainer->TotalNumberOfSamplesSeen() 
+                ? 0
+                : m_maxNumberOfSamples - m_trainer->TotalNumberOfSamplesSeen();
+
             GetTrainingMinibatch(minibatch, samplesLeft, computeDevice);
 
             // Train on the minibatch
@@ -167,7 +170,10 @@ namespace CNTK
                 size_t index = totalNumberOfSamples / action.frequency;
                 if (index != action.currentIndex)
                 {
-                    action.action(action.currentIndex, computeDevice);
+                    bool shouldContinue = action.action(action.currentIndex, computeDevice);
+                    if (!shouldContinue) // If any action wants to have early exit - we stop training.
+                        earlyExit = true;
+
                     action.currentIndex = index;
                     action.sampleCountWhenLastCalled = totalNumberOfSamples;
                 }
@@ -193,7 +199,7 @@ namespace CNTK
     }
 
     // TODO: Possibly expose a limiting counter on the number of samples for validation.
-    void TrainingSession::CrossValidate(size_t currentIndex, const DeviceDescriptor& computeDevice)
+    bool TrainingSession::CrossValidate(size_t currentIndex, const DeviceDescriptor& computeDevice)
     {
         if (m_crossValidationSource) // Running cross validation
         {
@@ -214,11 +220,11 @@ namespace CNTK
             }
 
             m_crossValidationSource->RestoreFromCheckpoint(checkpoint);
-            OnCrossValidationEnd(currentIndex, accumulatedError / totalNumberOfSamples, totalNumberOfSamples, numberOfMinibatches);
+            return OnCrossValidationEnd(currentIndex, accumulatedError / totalNumberOfSamples, totalNumberOfSamples, numberOfMinibatches);
         }
         else // Only invoking the callback.
         {
-            OnCrossValidationEnd(currentIndex, 0, 0, 0);
+            return OnCrossValidationEnd(currentIndex, 0, 0, 0);
         }
     }
 

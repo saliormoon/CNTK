@@ -42,6 +42,8 @@ class TrainingSession(cntk_py.TrainingSession):
         cv_frequency (int): frequency in samples for cross validation
           If ``sys.maxsize``, a single cross validation is performed at the end of training.
         cv_mb_size_schedule (:class:`~cntk.cntk_py.minibatch_size_schedule`): minibatch schedule for cross validation
+        cv_callback (func (index, avarage_error, cv_num_samples, cv_num_minibatches)): Callback that will be called with cv_frequency which can implement custom cross validation logic,
+          returns False if training should be stopped.
         max_training_samples (int): maximum number of samples used for training
     '''
 
@@ -145,13 +147,17 @@ class TrainingSession(cntk_py.TrainingSession):
             average_error (float): average error for the cross validation
             num_samples (int): number of samples in cross validation
             num_minibatches (int): number of minibatch in cross validation
+
+        Returns:
+            True if training should continue, False otherwise.
         '''
         if self.cv_callback is not None:
-            self.cv_callback(index, average_error, num_samples, num_minibatches)
+            return self.cv_callback(index, average_error, num_samples, num_minibatches)
         elif self.progress_printer:
             msg = "Cross Validation [{}]: Minibatch[1-{}]: errs = {:0.2f}% * {}".format(
                 index + 1, num_minibatches, average_error * 100, num_samples)
             self.progress_printer.log(msg)
+            return True
 
 
 @typemap
@@ -232,6 +238,8 @@ def training_session(training_minibatch_source,
         cv_frequency (int): frequency in samples for cross validation
         cv_mb_size_schedule (:class:`~cntk.cntk_py.minibatch_size_schedule`): minibatch schedule for cross validation
           If ``sys.maxsize``, a single cross validation is performed at the end of training.
+        cv_callback (func (index, avarage_error, cv_num_samples, cv_num_minibatches)): Callback that will be called with cv_frequency which can implement custom cross validation logic,
+          returns False if training should be stopped.
         max_training_samples (int): maximum number of samples used for training
 
     Returns:
