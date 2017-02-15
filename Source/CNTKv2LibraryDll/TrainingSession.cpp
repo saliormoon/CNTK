@@ -96,13 +96,6 @@ namespace CNTK
             checkpointFrequencyInSamples = 0;
         }
 
-        if (!m_crossValidationSource)
-        {
-            if(crossValidationFrequencyInSamples != 0 && crossValidationFrequencyInSamples != std::numeric_limits<size_t>::max())
-                InvalidArgument("Cross validation minibatch source is not allowed to be empty.");
-            crossValidationFrequencyInSamples = 0;
-        }
-
         // Let's calculate the warm up period the distributed learners may need.
         // We will take the maximum warm up period required.
         auto learners = trainer->ParameterLearners();
@@ -202,24 +195,31 @@ namespace CNTK
     // TODO: Possibly expose a limiting counter on the number of samples for validation.
     void TrainingSession::CrossValidate(size_t currentIndex, const DeviceDescriptor& computeDevice)
     {
-        std::unordered_map<Variable, ValuePtr> minibatch;
-        double accumulatedError = 0;
-        double error;
-        size_t totalNumberOfSamples = 0;
-        size_t numberOfMinibatches = 0;
-
-        auto checkpoint = m_crossValidationSource->GetCheckpointState();
-        size_t sampleCount = 0;
-        while(GetCrossValidationMinibatch(minibatch, m_crossValidationSchedule[sampleCount], computeDevice), !minibatch.empty())
+        if (m_crossValidationSource) // Running cross validation
         {
-            error = m_trainer->TestMinibatch(minibatch, computeDevice, sampleCount);
-            accumulatedError += error;
-            totalNumberOfSamples += sampleCount;
-            numberOfMinibatches++;
-        }
-        m_crossValidationSource->RestoreFromCheckpoint(checkpoint);
+            std::unordered_map<Variable, ValuePtr> minibatch;
+            double accumulatedError = 0;
+            double error;
+            size_t totalNumberOfSamples = 0;
+            size_t numberOfMinibatches = 0;
 
-        OnCrossValidationEnd(currentIndex, accumulatedError / totalNumberOfSamples, totalNumberOfSamples, numberOfMinibatches);
+            auto checkpoint = m_crossValidationSource->GetCheckpointState();
+            size_t sampleCount = 0;
+            while (GetCrossValidationMinibatch(minibatch, m_crossValidationSchedule[sampleCount], computeDevice), !minibatch.empty())
+            {
+                error = m_trainer->TestMinibatch(minibatch, computeDevice, sampleCount);
+                accumulatedError += error;
+                totalNumberOfSamples += sampleCount;
+                numberOfMinibatches++;
+            }
+
+            m_crossValidationSource->RestoreFromCheckpoint(checkpoint);
+            OnCrossValidationEnd(currentIndex, accumulatedError / totalNumberOfSamples, totalNumberOfSamples, numberOfMinibatches);
+        }
+        else // Only invoking the callback.
+        {
+            OnCrossValidationEnd(currentIndex, 0, 0, 0);
+        }
     }
 
     inline void TrainingSession::ReportProgress(size_t currentIndex)

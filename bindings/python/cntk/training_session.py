@@ -48,10 +48,11 @@ class TrainingSession(cntk_py.TrainingSession):
     def __init__(self, training_minibatch_source, trainer, mb_size_schedule,
                  progress_printer, model_inputs_to_mb_source_mapping,
                  checkpoint_frequency, checkpoint_filename, save_all_checkpoints,
-                 restore, progress_frequency, cv_source, cv_frequency, cv_mb_size_schedule, max_training_samples):
+                 restore, progress_frequency, cv_source, cv_frequency, cv_mb_size_schedule, cv_callback, max_training_samples):
 
         self.progress_printer = progress_printer
         self.trainer = trainer
+        self.cv_callback = cv_callback
 
         if not isinstance(mb_size_schedule, cntk_py.minibatch_size_schedule):
             raise ValueError('mb_size_schedule type (%s) not supported. '
@@ -68,12 +69,6 @@ class TrainingSession(cntk_py.TrainingSession):
 
         if progress_frequency is None:
             progress_frequency = sys.maxsize
-
-        if cv_source is None:
-            if cv_frequency is not None and cv_frequency != 0:
-                raise ValueError(
-                    "Cross validation frequency cannot be specified without cross validation minibatch source")
-            cv_frequency = 0
 
         if cv_frequency is None:
             cv_frequency = sys.maxsize
@@ -145,7 +140,9 @@ class TrainingSession(cntk_py.TrainingSession):
             num_samples (int): number of samples in cross validation
             num_minibatches (int): number of minibatch in cross validation
         '''
-        if self.progress_printer:
+        if self.cv_callback is not None:
+            self.cv_callback(index, average_error, num_samples, num_minibatches)
+        elif self.progress_printer:
             msg = "Cross Validation [{}]: Minibatch[1-{}]: errs = {:0.2f}% * {}".format(
                 index + 1, num_minibatches, average_error * 100, num_samples)
             self.progress_printer.log(msg)
@@ -208,6 +205,7 @@ def training_session(training_minibatch_source,
                      cv_source=None,
                      cv_mb_size_schedule=None,
                      cv_frequency=None,
+                     cv_callback=None,
                      max_training_samples=None):
     '''
     A factory function to create a training session object.
@@ -244,4 +242,5 @@ def training_session(training_minibatch_source,
                            cv_source=cv_source,
                            cv_frequency=cv_frequency,
                            cv_mb_size_schedule=cv_mb_size_schedule,
+                           cv_callback=cv_callback,
                            max_training_samples=max_training_samples)
