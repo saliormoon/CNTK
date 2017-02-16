@@ -244,7 +244,8 @@ class MinibatchSource(cntk_py.MinibatchSource):
         '''
         return self.get_checkpoint_state()
 
-    def set_current_position(self, position):
+    @current_position.setter
+    def current_position(self, position):
         '''
         Sets current position in the minibatch source.
 
