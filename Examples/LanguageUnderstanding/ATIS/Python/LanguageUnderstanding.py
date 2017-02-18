@@ -17,7 +17,6 @@ import cntk
 # Paths relative to current python file.
 abs_path   = os.path.dirname(os.path.abspath(__file__))
 data_path  = os.path.join(abs_path, "..", "Data") # under Examples/LanguageUnderstanding/ATIS
-model_path = os.path.join(abs_path, "Models")
 vocab_size = 943 ; num_labels = 129 ; num_intents = 26    # number of words in vocab, slot labels, and intent labels
 
 # model dimensions
@@ -53,7 +52,7 @@ def create_model():
 # train action         #
 ########################
 
-def train(reader, model, max_epochs):
+def train(reader, model, max_epochs, model_dir=None):
     # Input variables denoting the features and label data
     query = cntk.blocks.Input(input_dim,  is_sparse=False)
     slot_labels = cntk.blocks.Input(num_labels, is_sparse=True)  # TODO: make sparse once it works
@@ -97,7 +96,9 @@ def train(reader, model, max_epochs):
     #progress_printer = ProgressPrinter(tag='Training', num_epochs=max_epochs)
 
     t = 0
- 
+    current_work_dir = os.getcwd()
+    print('the  current_work_dir is {}'.format(current_work_dir))
+    print('the model dir is {}'.format(model_dir))
     # loop over epochs
     for epoch in range(max_epochs):
         epoch_end = (epoch+1) * epoch_size
@@ -109,7 +110,15 @@ def train(reader, model, max_epochs):
             trainer.train_minibatch(data)                                   # update model with it
             t += trainer.previous_minibatch_sample_count                    # count samples processed so far
             progress_printer.update_with_trainer(trainer, with_metric=True) # log progress
-            z.save(os.path.join(model_path, "atis" + "_{}.dnn".format(epoch))) 
+            if model_dir:
+                os.chdir(model_dir)
+                z.save("atis" + "_{}.dnn".format(epoch))
+                os.chdir(current_work_dir)
+                #model_file = os.path.join(model_dir, "atis" + "_{}.dnn".format(epoch))
+                #print('model file name before norm is {}'.format(model_file))
+                #model_file = os.path.normpath(model_file)
+                #print('model file name after norm is {}'.format(model_file))
+                #z.save(model_file)
 
             #def trace_node(name):
             #    nl = [n for n in z.parameters if n.name() == name]
@@ -143,8 +152,9 @@ if __name__=='__main__':
     reader = create_reader(data_path + "/atis.train.ctf")
     model = create_model()
 
+    model_path = os.path.join(abs_path, "Models")
     # train
-    train(reader, model, max_epochs)
+    train(reader, model, max_epochs, model_path)
 
     # test (TODO)
     reader = create_reader(data_path + "/atis.test.ctf")
