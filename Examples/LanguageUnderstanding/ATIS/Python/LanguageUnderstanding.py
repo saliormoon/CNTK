@@ -16,7 +16,7 @@ import cntk
 
 # Paths relative to current python file.
 abs_path   = os.path.dirname(os.path.abspath(__file__))
-data_path  = os.path.join(abs_path, "..", "Data") # under Examples/LanguageUnderstanding/ATIS
+data_dir  = os.path.join(abs_path, "..", "Data") # under Examples/LanguageUnderstanding/ATIS
 vocab_size = 943 ; num_labels = 129 ; num_intents = 26    # number of words in vocab, slot labels, and intent labels
 
 # model dimensions
@@ -140,7 +140,7 @@ if __name__=='__main__':
     set_fixed_random_seed(1)  # BUGBUG: has no effect at present  # TODO: remove debugging facilities once this all works
     force_deterministic_algorithms()
 
-    reader = create_reader(data_path + "/atis.train.ctf")
+    reader = create_reader(data_dir + "/atis.train.ctf")
     model = create_model()
 
     model_path = os.path.join(abs_path, "Models")
@@ -148,6 +148,6 @@ if __name__=='__main__':
     train(reader, model, max_epochs, model_path)
 
     # test (TODO)
-    reader = create_reader(data_path + "/atis.test.ctf")
+    reader = create_reader(data_dir + "/atis.test.ctf")
 
     #test(reader, model_path + "/slu.cmf")  # TODO: what is the correct pattern here?
