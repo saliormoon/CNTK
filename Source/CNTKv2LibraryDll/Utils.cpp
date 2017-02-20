@@ -844,7 +844,7 @@ namespace CNTK
         else if (scalarData->GetDataType() == DataType::Double)
             scalar = *(cpuData->DataBuffer<double>());
         else
-            LogicError("Unsupported DataType of training loss value");
+            LogicError("Unsupported DataType");
 
         return scalar;
     }

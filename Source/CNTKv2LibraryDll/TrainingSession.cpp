@@ -81,9 +81,7 @@ namespace CNTK
         m_restoreFromCheckpointIfExists(restoreFromCheckpointIfExists),
         m_saveAllCheckpoints(saveAllCheckpoints),
         m_crossValidationSource(crossValidationSource),
-        m_crossValidationSchedule(crossValidationSchedule),
-        m_progressWriters((progressWriters.empty() && m_trainer != nullptr)
-                            ? m_trainer->ProgressWriters() : progressWriters)
+        m_crossValidationSchedule(crossValidationSchedule)
     {
         if (!trainingSource)
             InvalidArgument("Training minibatch source is not allowed to be null.");
@@ -141,6 +139,8 @@ namespace CNTK
         if (progressFrequencyInSamples != 0)
             m_actions.push_back({ progressFrequencyInSamples, 0, 0,
                 [this](size_t currentIndex, const DeviceDescriptor&) { ReportProgress(currentIndex); } });
+
+        m_trainer->AddProgressWriters(progressWriters);
     }
 
     void TrainingSession::Train(const DeviceDescriptor& computeDevice)
@@ -171,13 +171,6 @@ namespace CNTK
             // Train on the minibatch.
             OnMinibatchStart();
             shouldTrain = m_trainer->TrainMinibatch(minibatch, computeDevice);
-
-            if (m_trainer->ProgressWriters().empty())
-            {
-                // Only update the writers if the trainer did not do this already.
-                m_trainer->UpdateTrainingProgress(m_progressWriters);
-            }
-
             OnMinibatchEnd();
 
             auto profMisc = Microsoft::MSR::CNTK::ScopeProfile(Microsoft::MSR::CNTK::profilerEvtMainPost);
@@ -225,37 +218,15 @@ namespace CNTK
         {
             m_trainer->TestMinibatch(minibatch, computeDevice);
             sampleCount = m_trainer->PreviousTestMinibatchSampleCount();
-
-            if (m_trainer->ProgressWriters().empty())
-            {
-                // Only update the writers if the trainer did not do this already.
-                m_trainer->UpdateEvaluationProgress(m_progressWriters);
-            }
         }
         m_crossValidationSource->RestoreFromCheckpoint(checkpoint);
-
-        if (!m_trainer->ProgressWriters().empty())
-        {
-            m_trainer->SummarizeEvaluationProgress();
-        }
-        else
-        {
-            m_trainer->SummarizeEvaluationProgress(m_progressWriters);
-        }
-
+        m_trainer->SummarizeEvaluationProgress();
         OnCrossValidationEnd(currentIndex);
     }
 
     inline void TrainingSession::ReportProgress(size_t /*currentIndex*/)
     {
-        if (!m_trainer->ProgressWriters().empty())
-        {
-            m_trainer->SummarizeTrainingProgress();
-        }
-        else
-        {
-            m_trainer->SummarizeTrainingProgress(m_progressWriters);
-        }
+        m_trainer->SummarizeTrainingProgress();
     }
 
     void TrainingSession::GetTrainingMinibatch(std::unordered_map<Variable, ValuePtr>& minibatch, size_t maxMbSize, const DeviceDescriptor& computeDevice)

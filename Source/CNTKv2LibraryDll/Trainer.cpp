@@ -69,7 +69,7 @@ namespace CNTK
           m_distributed(false),
           m_trainingProgress(std::make_unique<ProgressAccumulators>()),
           m_evalProgress(std::make_unique<ProgressAccumulators>()),
-          m_progressWriters(progressWriters)
+          m_progressWriters(progressWriters.begin(), progressWriters.end())
     {
         // By default we set the number of threads to hardware concurrency.
         if (!Internal::MaxNumCPUThreadsSet())
@@ -183,8 +183,7 @@ namespace CNTK
         const ValuePtr& aggregateEvalCriterionValue = outputs[m_aggregatedEvaluationFunction];
         m_prevTestMinibatchNumSamples = GetSampleCount(m_testSampleCountVar, outputs[m_testSampleCountVar]);
 
-        m_evalProgress->Update(computeDevice, m_prevTestMinibatchNumSamples, nullptr, aggregateEvalCriterionValue);
-        UpdateEvaluationProgress(m_progressWriters);
+        UpdateEvaluationProgress(computeDevice, m_prevTestMinibatchNumSamples, aggregateEvalCriterionValue);
 
         // TODO: it is not optimal to return average evaluation after each minibatch, since it potentially requires a
         // roundtrip to GPU. A better approach would be to have a separate method to return the average evaluation on
@@ -231,11 +230,9 @@ namespace CNTK
         std::unordered_map<Variable, ValuePtr> parameterGradients;
         ExecuteForwardBackward(arguments, outputsToFetch, computeDevice, parameterGradients);
 
-        m_trainingProgress->Update(computeDevice, m_prevMinibatchNumSamples, m_prevMinibatchAggregateTrainingLossValue,
-                                   m_prevMinibatchAggregateEvalCriterionValue);
-
         // TODO: exclude updating progress writers from profiling?
-        UpdateTrainingProgress(m_progressWriters);
+        UpdateTrainingProgress(computeDevice, m_prevMinibatchNumSamples, m_prevMinibatchAggregateTrainingLossValue,
+                               m_prevMinibatchAggregateEvalCriterionValue);
 
         auto profWeights = Microsoft::MSR::CNTK::ScopeProfile(Microsoft::MSR::CNTK::profilerEvtMainWeights);
 
@@ -284,26 +281,26 @@ namespace CNTK
         }
 
         // must accumulate after aggregation
-        m_trainingProgress->Update(computeDevice, m_prevMinibatchNumSamples, m_prevMinibatchAggregateTrainingLossValue,
-                                   m_prevMinibatchAggregateEvalCriterionValue);
-
         // TODO: exclude updating progress from profiling?
-        UpdateTrainingProgress(m_progressWriters);
+        UpdateTrainingProgress(computeDevice, m_prevMinibatchNumSamples, m_prevMinibatchAggregateTrainingLossValue,
+                               m_prevMinibatchAggregateEvalCriterionValue);
         return updated;
     }
 
-    void Trainer::UpdateTrainingProgress(const std::vector<ProgressWriterPtr>& progressWriters)
+    void Trainer::UpdateTrainingProgress(const DeviceDescriptor& computeDevice, size_t numSamples, const ValuePtr& loss,
+                                         const ValuePtr& evalCriterion)
     {
-        for (auto& progressWriter : progressWriters)
+        m_trainingProgress->Update(computeDevice, numSamples, loss, evalCriterion);
+        for (auto& progressWriter : m_progressWriters)
         {
             progressWriter->UpdateTraining(m_prevMinibatchNumSamples,
                                            m_trainingProgress->m_loss, m_trainingProgress->m_evalCriterion);
         }
     }
 
-    void Trainer::SummarizeTrainingProgress(const std::vector<ProgressWriterPtr>& progressWriters)
+    void Trainer::SummarizeTrainingProgress()
     {
-        for (auto& progressWriter : progressWriters)
+        for (auto& progressWriter : m_progressWriters)
         {
             progressWriter->WriteTrainingSummary(m_trainingProgress->m_loss, m_trainingProgress->m_evalCriterion);
         }
@@ -311,22 +308,29 @@ namespace CNTK
         m_trainingProgress->Reset();
     }
 
-    void Trainer::UpdateEvaluationProgress(const std::vector<ProgressWriterPtr>& progressWriters)
+    void Trainer::UpdateEvaluationProgress(const DeviceDescriptor& computeDevice, size_t numSamples, 
+                                           const ValuePtr& evalCriterion)
     {
-        for (auto& progressWriter : progressWriters)
+        m_evalProgress->Update(computeDevice, numSamples, nullptr, evalCriterion);
+        for (auto& progressWriter : m_progressWriters)
         {
             progressWriter->UpdateEvaluation(m_prevTestMinibatchNumSamples, m_evalProgress->m_evalCriterion);
         }
     }
 
-    void Trainer::SummarizeEvaluationProgress(const std::vector<ProgressWriterPtr>& progressWriters)
+    void Trainer::SummarizeEvaluationProgress()
     {
-        for (auto& progressWriter : progressWriters)
+        for (auto& progressWriter : m_progressWriters)
         {
             progressWriter->WriteEvaluationSummary(m_evalProgress->m_evalCriterion);
         }
 
         m_evalProgress->Reset();
+    }
+
+    void Trainer::AddProgressWriters(const std::vector<ProgressWriterPtr>& progressWriters)
+    {
+        m_progressWriters.insert(progressWriters.begin(), progressWriters.end());
     }
 
     void Trainer::ExecuteForwardBackward(const std::unordered_map<Variable, ValuePtr>& arguments, std::unordered_map<Variable, ValuePtr>& outputsToFetch, const DeviceDescriptor& computeDevice, std::unordered_map<Variable, ValuePtr>& parameterGradients)

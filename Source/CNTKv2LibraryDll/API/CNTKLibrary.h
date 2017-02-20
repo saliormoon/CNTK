@@ -4179,18 +4179,12 @@ namespace CNTK
         ///
         /// Writes the summary of training progress and resets the accumulators.
         ///
-        CNTK_API void SummarizeTrainingProgress()
-        {
-            SummarizeTrainingProgress(m_progressWriters);
-        }
+        CNTK_API void SummarizeTrainingProgress();
 
         ///
         /// Writes the summary of evaluation progress and resets the accumulators.
         ///
-        CNTK_API void SummarizeEvaluationProgress()
-        {
-            SummarizeEvaluationProgress(m_progressWriters);
-        }
+        CNTK_API void SummarizeEvaluationProgress();
 
     private:
         template <typename T1, typename ...CtorArgTypes>
@@ -4214,12 +4208,9 @@ namespace CNTK
 
         void Save(const std::wstring& modelFilePath, const std::vector<DictionaryValue>& learnerState, const Dictionary& externalState);
 
-        void UpdateTrainingProgress(const std::vector<ProgressWriterPtr>& progressWriters);
-        void SummarizeTrainingProgress(const std::vector<ProgressWriterPtr>& progressWriters);
-
-        void UpdateEvaluationProgress(const std::vector<ProgressWriterPtr>& progressWriters);
-        void SummarizeEvaluationProgress(const std::vector<ProgressWriterPtr>& progressWriters);
-        const std::vector<ProgressWriterPtr>& ProgressWriters() const { return m_progressWriters; }
+        void UpdateTrainingProgress(const DeviceDescriptor& computeDevice, size_t numSamples, const ValuePtr& loss, const ValuePtr& evalCriterion);
+        void UpdateEvaluationProgress(const DeviceDescriptor& computeDevice, size_t numSamples, const ValuePtr& evalCriterion);
+        void AddProgressWriters(const std::vector<ProgressWriterPtr>& progressWriters);
 
         FunctionPtr m_combinedTrainingFunction;
         FunctionPtr m_model;
@@ -4246,7 +4237,7 @@ namespace CNTK
         ProgressAccumulatorsPtr m_trainingProgress;
         ProgressAccumulatorsPtr m_evalProgress;
 
-        std::vector<ProgressWriterPtr> m_progressWriters;
+        std::unordered_set<ProgressWriterPtr> m_progressWriters;
     };
 
     ///
@@ -4791,7 +4782,6 @@ namespace CNTK
         const MinibatchSizeSchedule m_crossValidationSchedule;
 
         std::vector<PeriodicAction> m_actions;
-        std::vector<ProgressWriterPtr> m_progressWriters;
     };
 
     ///
@@ -4831,7 +4821,7 @@ namespace CNTK
         /// The frequency value other than zero specifies arithmetic schedule, i.e. write progress after each 
         /// 'frequency' updates.
         ///
-        /// The firsUpdatesToWrite arguments only apply on arithemetic schedule. If specified, the first
+        /// The firstUpdatesToWrite arguments only apply on arithemetic schedule. If specified, the first
         /// 'firstUpdatesToWrite' updates will be written explicitly before using an arithmetic schedule.
         ///
         CNTK_API ProgressWriter(size_t trainingUpdateWriteFrequency, size_t trainingFirstUpdatesToWrite,
