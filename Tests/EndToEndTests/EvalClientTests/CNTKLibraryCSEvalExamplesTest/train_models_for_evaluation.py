@@ -14,7 +14,7 @@ import TrainResNet_CIFAR10
 import LanguageUnderstanding
 
 #output_dir must be an absolute path
-def train_cifar_resnet_for_eval(output_dir):
+def train_cifar_resnet_for_eval(test_device, output_dir):
 
     if not os.path.isdir(output_dir):
         os.mkdir(output_dir)
@@ -28,13 +28,17 @@ def train_cifar_resnet_for_eval(output_dir):
         for fn in range(6):
             myzip.extract('data/train/%05d.png'%(fn), output_dir)
   
-    reader_train = TrainResNet_CIFAR10.create_reader(os.path.join(base_path, 'train_map.txt'), os.path.join(base_path, 'CIFAR-10_mean.xml'), True)
-    reader_test  = TrainResNet_CIFAR10.create_reader(os.path.join(base_path, 'test_map.txt'), os.path.join(base_path, 'CIFAR-10_mean.xml'), False)
+    if test_device == 'cpu':
+        print('train cifar_resnet only on GPU device. Use pre-trained models.')
+    else:
+        print('training cifar_resnet on GPU device...')
+        reader_train = TrainResNet_CIFAR10.create_reader(os.path.join(base_path, 'train_map.txt'), os.path.join(base_path, 'CIFAR-10_mean.xml'), True)
+        reader_test  = TrainResNet_CIFAR10.create_reader(os.path.join(base_path, 'test_map.txt'), os.path.join(base_path, 'CIFAR-10_mean.xml'), False)
+        TrainResNet_CIFAR10.train_and_evaluate(reader_train, reader_test, 'resnet20', epoch_size=512, max_epochs=1, profiler_dir=None, model_dir=output_dir)
 
-    TrainResNet_CIFAR10.train_and_evaluate(reader_train, reader_test, 'resnet20', epoch_size=512, max_epochs=1, profiler_dir=None, model_dir=output_dir)
     return base_path
 
-def train_language_understanding_atis_for_eval(output_dir):
+def train_language_understanding_atis_for_eval(test_device, output_dir):
 
     abs_path   = os.path.dirname(os.path.abspath(__file__))
     data_path  = os.path.join(os.path.join(abs_path, "..", "..", "..", "..", "Examples", "LanguageUnderstanding", "ATIS", "Data"))
@@ -46,11 +50,15 @@ def train_language_understanding_atis_for_eval(output_dir):
 
 if __name__=='__main__':
     
-    # TODO: passing output_dir as parameter.
-    # It works well both for Windows and Linux, but does not work for cygwin, as the path passed by cygwin cannot be correctly resolved by python.
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-d', '--test_device', help='the test device to run', required=True)
+
+    args = vars(parser.parse_args())
+    test_device = args['test_device']
+
     output_dir = os.path.dirname(os.path.abspath(__file__))
-    
-    print('the output_dir before norm is {}.'.format(output_dir))
-    train_language_understanding_atis_for_eval(output_dir)
-    train_cifar_resnet_for_eval(output_dir)
+    print('the output_dir is {}.'.format(output_dir))
+    print('the test_device is {}.'.format(test_device))
+    train_language_understanding_atis_for_eval(test_device, output_dir)
+    train_cifar_resnet_for_eval(test_device, output_dir)
 
