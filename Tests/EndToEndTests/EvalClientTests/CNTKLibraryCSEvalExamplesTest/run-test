@@ -11,7 +11,7 @@ PythonVer=$(python -c "import sys; sys.stdout.write(str(sys.version_info[0])); s
 if [ "$PythonVer" == "3" ]; then
   echo Skip this test for Python 3.4/3.5. Run this test only on Python 2.7 to save test time.
   # Simuate test completes.
-  echo Evaluation completes
+  echo Evaluation completes >/dev/null
   exit 0
 fi
 
