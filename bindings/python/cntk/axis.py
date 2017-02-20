@@ -3,6 +3,7 @@
 # for full license information.
 # ==============================================================================
 
+from functools import lru_cache
 from . import cntk_py
 from .utils import typemap
 
@@ -26,6 +27,7 @@ class Axis(cntk_py.Axis):
         super(Axis, self).__init__(*args)
 
     @property
+    @lru_cache(maxsize=None)
     def is_ordered(self):
         '''
         Returns True if the axis is ordered; i.e. if there is an ordering between the dimensions along the axis.
@@ -36,6 +38,7 @@ class Axis(cntk_py.Axis):
         return super(Axis, self).is_ordered()
 
     @property
+    @lru_cache(maxsize=None)
     def is_static_axis(self):
         '''
         Returns True if the axis is of type static and False otherwise
@@ -46,6 +49,7 @@ class Axis(cntk_py.Axis):
         return super(Axis, self).is_static_axis()
 
     @property
+    @lru_cache(maxsize=None)
     def name(self):
         '''
         Returns the name of this axis.
@@ -55,6 +59,7 @@ class Axis(cntk_py.Axis):
         '''
         return super(Axis, self).name()
 
+    @lru_cache(maxsize=None)
     def static_axis_index(self, checked=True):
         '''
         Returns the integer with which the static axis is defined. For example, 0 = first axis, 1 = second axis, etc.
@@ -68,6 +73,7 @@ class Axis(cntk_py.Axis):
         return super(Axis, self).static_axis_index(checked)
 
     @staticmethod
+    @lru_cache(maxsize=None)
     @typemap
     def default_dynamic_axis():
         '''
@@ -79,6 +85,7 @@ class Axis(cntk_py.Axis):
         return cntk_py.Axis.default_dynamic_axis()
 
     @staticmethod
+    @lru_cache(maxsize=None)
     @typemap
     def default_batch_axis():
         '''
@@ -90,6 +97,7 @@ class Axis(cntk_py.Axis):
         return cntk_py.Axis.default_batch_axis()
 
     @staticmethod
+    @lru_cache(maxsize=None)
     @typemap
     def all_static_axes():
         '''
@@ -101,6 +109,7 @@ class Axis(cntk_py.Axis):
         return cntk_py.Axis.all_static_axes()
 
     @staticmethod
+    @lru_cache(maxsize=None)
     @typemap
     def all_axes():
         '''
@@ -112,6 +121,7 @@ class Axis(cntk_py.Axis):
         return cntk_py.Axis.all_axes()
 
     @staticmethod
+    @lru_cache(maxsize=None)
     @typemap
     def default_input_variable_dynamic_axes():
         '''
@@ -123,6 +133,7 @@ class Axis(cntk_py.Axis):
         return tuple(reversed(cntk_py.Axis.default_input_variable_dynamic_axes()))
 
     @staticmethod
+    @lru_cache(maxsize=None)
     @typemap
     def unknown_dynamic_axes():
         '''

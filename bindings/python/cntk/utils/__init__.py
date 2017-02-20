@@ -7,6 +7,7 @@ import sys
 import numbers
 import collections
 import copy
+from functools import lru_cache
 import numpy as np
 from numbers import Number
 from scipy import sparse
@@ -25,6 +26,7 @@ def is_string(s):
     '''
     return isinstance(s, ("".__class__, u"".__class__))
 
+@lru_cache(maxsize=None)
 def sanitize_precision(precision):
     '''
     Converts precision to NumPy precision
@@ -96,6 +98,7 @@ def one_hot(batch, num_classes, dtype=None, device=None):
     return value
 
 
+@lru_cache(maxsize=None)
 def sanitize_shape(shape):
     """
     If shape is scalar, it creates a tuple out of it.
@@ -484,6 +487,7 @@ def sanitize_dtype_numpy(dtype):
         raise ValueError('data type "%s" is not supported' % dtype)
 
 
+@lru_cache(maxsize=None)
 def sanitize_dtype_cntk(dtype):
     if isinstance(dtype, int) and dtype in (cntk_py.DataType_Float, cntk_py.DataType_Double, cntk_py.DataType_Unknown):
         return dtype
@@ -501,6 +505,7 @@ def sanitize_dtype_cntk(dtype):
         raise ValueError('data type "%s" is not supported' % dtype)
 
 
+@lru_cache(maxsize=None)
 def sanitize_axis(axis):
     '''
     Sanitizes the axis.
@@ -707,19 +712,19 @@ def start_profiler(dir='profiler', sync_gpu=True, reserve_mem=cntk_py.default_pr
         reserve_mem: size in byte for profiler memory reserved
     '''
     cntk_py.start_profiler(dir, sync_gpu, reserve_mem)
-    
+
 def stop_profiler():
     '''
     Stop profiler from gathering performance statistics and flush them to file
     '''
     cntk_py.stop_profiler()
-    
+
 def enable_profiler():
     '''
     Enable profiler to gather data. Note that in training_session, profiler would be enabled automatically after the first check point
     '''
     cntk_py.enable_profiler()
-    
+
 def disable_profiler():
     '''
     Disable profiler from gathering data.

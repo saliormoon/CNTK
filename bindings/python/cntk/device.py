@@ -4,6 +4,7 @@
 # for full license information.
 # ==============================================================================
 
+from functools import lru_cache
 from . import cntk_py
 
 class DeviceDescriptor(cntk_py.DeviceDescriptor):
@@ -12,6 +13,7 @@ class DeviceDescriptor(cntk_py.DeviceDescriptor):
     otherwise, it is 0
     '''
 
+    @lru_cache(maxsize=None)
     def id(self):
         '''
         Returns id of device descriptor
@@ -21,6 +23,7 @@ class DeviceDescriptor(cntk_py.DeviceDescriptor):
         '''
         return super(DeviceDescriptor, self).id()
 
+    @lru_cache(maxsize=None)
     def type(self):
         '''
         Returns type of device descriptor. 1 if it is a GPU device or 0 if CPU.
@@ -30,6 +33,7 @@ class DeviceDescriptor(cntk_py.DeviceDescriptor):
         '''
         return super(DeviceDescriptor, self).type()
 
+@lru_cache(maxsize=None)
 def all_devices():
     '''
     Returns a device descriptor list with all the available devices
@@ -39,6 +43,7 @@ def all_devices():
     '''
     return cntk_py.DeviceDescriptor.all_devices()
 
+@lru_cache(maxsize=None)
 def best():
     '''
     Returns a device descriptor with the best configuration.
@@ -48,6 +53,7 @@ def best():
     '''
     return cntk_py.DeviceDescriptor.best_device()
 
+@lru_cache(maxsize=None)
 def cpu():
     '''
     Returns CPU device descriptor
@@ -57,6 +63,7 @@ def cpu():
     '''
     return cntk_py.DeviceDescriptor.cpu_device()
 
+@lru_cache(maxsize=None)
 def default():
     '''
     Returns default device
@@ -66,6 +73,7 @@ def default():
     '''
     return cntk_py.DeviceDescriptor.default_device()
 
+@lru_cache(maxsize=None)
 def gpu(device_id):
     '''
     Returns GPU device
@@ -84,6 +92,7 @@ def use_default_device():
     '''
     return cntk_py.DeviceDescriptor.use_default_device()
 
+@lru_cache(maxsize=None)
 def set_default_device(new_default_device):
     '''
     Set new device descriptor as default

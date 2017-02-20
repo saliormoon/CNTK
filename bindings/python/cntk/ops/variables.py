@@ -1,3 +1,4 @@
+from functools import lru_cache
 import numpy as np
 from cntk import cntk_py, NDArrayView
 from cntk.device import DeviceDescriptor
@@ -11,6 +12,7 @@ class VariableMixin(object):
     :class:`Parameter` and :class:`Constant`.
     '''
     @property
+    @lru_cache(maxsize=None)
     @typemap
     def dynamic_axes(self):
         '''
@@ -19,6 +21,7 @@ class VariableMixin(object):
         return super(VariableMixin, self).dynamic_axes()
 
     @property
+    @lru_cache(maxsize=None)
     def dtype(self):
         '''
         The NumPy type of this variable.
@@ -26,6 +29,7 @@ class VariableMixin(object):
         return sanitize_precision(self.get_data_type())
 
     @property
+    @lru_cache(maxsize=None)
     def is_constant(self):
         '''
         Whether this variable is a constant.
@@ -33,6 +37,7 @@ class VariableMixin(object):
         return super(VariableMixin, self).is_constant()
 
     @property
+    @lru_cache(maxsize=None)
     def is_input(self):
         '''
         Whether this variable is an input.
@@ -40,6 +45,7 @@ class VariableMixin(object):
         return super(VariableMixin, self).is_input()
 
     @property
+    @lru_cache(maxsize=None)
     def is_output(self):
         '''
         Whether this variable is an output.
@@ -47,6 +53,7 @@ class VariableMixin(object):
         return super(VariableMixin, self).is_output()
 
     @property
+    @lru_cache(maxsize=None)
     def is_parameter(self):
         '''
         Whether this variable is a parameter.
@@ -54,6 +61,7 @@ class VariableMixin(object):
         return super(VariableMixin, self).is_parameter()
 
     @property
+    @lru_cache(maxsize=None)
     def is_placeholder(self):
         '''
         Whether this variable is a placeholder.
@@ -61,6 +69,7 @@ class VariableMixin(object):
         return super(VariableMixin, self).is_placeholder()
 
     @property
+    @lru_cache(maxsize=None)
     def is_sparse(self):
         '''
         Whether this variable is sparse.
@@ -68,6 +77,7 @@ class VariableMixin(object):
         return super(VariableMixin, self).is_sparse()
 
     @property
+    @lru_cache(maxsize=None)
     def name(self):
         '''
         The name of this variable.
@@ -75,6 +85,7 @@ class VariableMixin(object):
         return super(VariableMixin, self).name()
 
     @property
+    @lru_cache(maxsize=None)
     def needs_gradient(self):
         '''
         Whether this variable needs gradients.
@@ -82,6 +93,7 @@ class VariableMixin(object):
         return super(VariableMixin, self).needs_gradient()
 
     @property
+    @lru_cache(maxsize=None)
     @typemap
     def owner(self):
         '''
@@ -92,6 +104,7 @@ class VariableMixin(object):
         return super(VariableMixin, self).owner()
 
     @property
+    @lru_cache(maxsize=None)
     def shape(self):
         '''
         The shape of this variable as a tuple.
@@ -99,6 +112,7 @@ class VariableMixin(object):
         return super(VariableMixin, self).shape().dimensions()
 
     @property
+    @lru_cache(maxsize=None)
     def uid(self):
         '''
         The internally generated unique name of the variable.

@@ -505,7 +505,6 @@ def nesterov(parameters, lr, momentum, unit_gain=default_unit_gain_value(),
         Importance of Initialization and Momentum in Deep Learning
         <http://www.cs.toronto.edu/~fritz/absps/momentum.pdf>`_.  Proceedings
         of the 30th International Conference on Machine Learning, 2013.
-            
     '''
     _verify_learning_rate_type(lr)
     _verify_momentum_type(momentum)
