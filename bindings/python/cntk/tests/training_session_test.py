@@ -76,7 +76,10 @@ def trainer(device):
     return {
         'trainer':trainer,
         'input':in1,
-        'label':labels
+        'label':labels,
+        'model':z,
+        'criteria':(ce, errs),
+        'learners':[learner]
     }
 
 
@@ -89,10 +92,11 @@ class MockProgressWriter(cntk_py.ProgressWriter):
         self.minibatch_info = []
 
     def on_write_training_update(self, samples, updates, aggregate_loss, aggregate_metric):
-        avg_loss = (aggregate_loss[1] - aggregate_loss[0]) / (samples[1] - samples[0])
-        avg_metric = (aggregate_metric[1] - aggregate_metric[0]) / (samples[1] - samples[0])
+        mb_samples = samples[1] - samples[0]
+        avg_loss = (aggregate_loss[1] - aggregate_loss[0]) / mb_samples
+        avg_metric = (aggregate_metric[1] - aggregate_metric[0]) / mb_samples
         self.minibatch_info.append(
-            (self.training_summary_counter, (avg_loss, avg_metric, samples)))
+            (self.training_summary_counter, (avg_loss, avg_metric, mb_samples)))
 
     def on_write_training_summary(self, samples, updates, summaries, aggregate_loss, aggregate_metric,
                                   elapsed_milliseconds):
@@ -301,7 +305,7 @@ def test_session_restart_from_checkpoint(tmpdir, device_id):
     writer2 = MockProgressWriter(training_summary_counter=1)
     session = training_session(
         training_minibatch_source=mbs,
-        trainer=t['trainer'],
+        trainer=Trainer(t['model'], t['criteria'], t['learners']),
         mb_size_schedule=minibatch_size_schedule(4),
         model_inputs_to_mb_source_mapping=input_map,
         progress_printer=[writer2],
