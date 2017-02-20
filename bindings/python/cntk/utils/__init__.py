@@ -229,7 +229,6 @@ def _is_dense(batch):
 
     return True
 
-@typemap
 def sanitize_batch(var, batch, seq_starts=None, device=None):
     '''
     Convert to :class:`~cntk.core.Value`.

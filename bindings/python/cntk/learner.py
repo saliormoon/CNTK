@@ -191,7 +191,6 @@ class UserLearner(cntk_py.Learner):
         '''
         raise NotImplementedError('UserLearner.update must be overriden')
 
-@typemap
 def training_parameter_schedule(schedule, unit, epoch_size=None):
     '''
     Create a training parameter schedule containing either per-sample (default)
@@ -262,7 +261,6 @@ def training_parameter_schedule(schedule, unit, epoch_size=None):
 
     raise ValueError('schedule must be either a float or a list, not %s'%type(schedule))
 
-@typemap
 def learning_rate_schedule(lr, unit, epoch_size=None):
     '''
     Create a learning rate schedule (using the same semantics as
@@ -284,7 +282,6 @@ def learning_rate_schedule(lr, unit, epoch_size=None):
     '''
     return training_parameter_schedule(lr, unit, epoch_size)
 
-@typemap
 def momentum_schedule(momentum, epoch_size=None):
     '''
     Create a per-minibatch momentum schedule (using the same semantics as 
@@ -321,7 +318,6 @@ def momentum_schedule(momentum, epoch_size=None):
     '''
     return training_parameter_schedule(momentum, UnitType.minibatch, epoch_size)
 
-@typemap
 def momentum_as_time_constant_schedule(momentum, epoch_size=None):
     '''
     Create a momentum schedule in a minibatch-size agnostic way 

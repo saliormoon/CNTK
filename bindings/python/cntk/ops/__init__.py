@@ -2700,7 +2700,6 @@ def placeholder_variable(shape=None, dynamic_axes=None, name=''):
     return placeholder_variable(shape, name, dynamic_axes)
 
 
-@typemap
 def parameter(shape=None, init=None, dtype=None, device=None, name=''):
     '''
     It creates a parameter tensor.
@@ -2750,7 +2749,6 @@ def parameter(shape=None, init=None, dtype=None, device=None, name=''):
     return Parameter(shape, init, dtype, device, name)
 
 
-@typemap
 def constant(value=None, shape=None, dtype=None, device=None, name=''):
     '''
     It creates a constant tensor initialized from a numpy array

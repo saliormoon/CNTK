@@ -151,7 +151,6 @@ class TrainingSession(cntk_py.TrainingSession):
             self.progress_printer.log(msg)
 
 
-@typemap
 def minibatch_size_schedule(schedule, epoch_size=1):
     '''
     Create a minibatch size schedule
@@ -195,7 +194,6 @@ def minibatch_size_schedule(schedule, epoch_size=1):
         'schedule must be either a float or a list, not %s' % type(schedule))
 
 
-@typemap
 def training_session(training_minibatch_source,
                      trainer, mb_size_schedule,
                      progress_printer=None,

@@ -124,7 +124,6 @@ class Function(cntk_py.Function):
         return super(Function, self).arguments()
 
     @property
-    @typemap
     def attributes(self):
         '''
         List of the attributes of the function
@@ -229,7 +228,6 @@ class Function(cntk_py.Function):
             return list(output_map.values())[0]
 
 
-    @typemap
     def forward(self, arguments, outputs, keep_for_backward=None, device=None, as_numpy=True):
         '''
         Computes the values of speficied variables in ``outputs``, using values
@@ -310,7 +308,6 @@ class Function(cntk_py.Function):
 
         return state, output_map
 
-    @typemap
     def backward(self, state, root_gradients, variables):
         '''
         Backpropagates supplied ``root_gradients`` for one or more of the output
@@ -355,7 +352,6 @@ class Function(cntk_py.Function):
 
         return var_gradients
 
-    @typemap
     def grad(self, at, wrt=None, device=None):
         '''
         Computes the gradient of this Function at location ``at`` with respect to ``wrt``.
@@ -561,7 +557,6 @@ class Function(cntk_py.Function):
         '''
         return super(Function, self).replace_placeholder(substitution)
 
-    @typemap
     def find_all_with_name(self, name):
         '''
         Returns a list of primitive function with ``name`` in the graph
@@ -591,7 +586,6 @@ class Function(cntk_py.Function):
         return graph.find_all_with_name(self, name)
 
     # TODO have a better name for combine() in this case
-    @typemap
     def find_by_name(self, name):
         '''
         Returns a primitive function with ``name`` in the graph starting from
@@ -682,14 +676,12 @@ class Function(cntk_py.Function):
             device = DeviceDescriptor.use_default_device()
         return cntk_py.Function.load_model(filename, device)
 
-@typemap
 def load_model(filename, device=None):
     '''
     Alias for :func:`~cntk.ops.functions.Function.load`.
     '''
     return Function.load(filename, device)
 
-@typemap
 def save_model(model, filename): # legacy name
     import warnings
     warnings.warn('This will be removed in future versions. Please use '

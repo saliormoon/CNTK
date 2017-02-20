@@ -95,7 +95,6 @@ class NDArrayView(cntk_py.NDArrayView):
                 csr_array.indptr, csr_array.indices, device, read_only)
 
     @staticmethod
-    @typemap
     def from_data(data, device=None, read_only=False):
         '''
         Create a :class:`NDArrayView` instance from a NumPy or SciPy sparse array in CSR
@@ -111,6 +110,10 @@ class NDArrayView(cntk_py.NDArrayView):
             :class:`NDArrayView` instance
         '''
         if isinstance(data, cntk_py.NDArrayView):
+            if not isinstance(data, NDArrayView):
+                # So that we can save the @typemap (all other paths are alredy
+                # mapped) ...
+                data.__class__ = NDArrayView
             return data
 
         if isinstance(data, np.number):

@@ -50,7 +50,7 @@ def test_typemap():
     @typemap
     def returnTupleWithDict():
         return (None, { _param(): _param() })
-                
+
     res = returnTupleWithDict()
     assert len(res) == 2
     for k,v in res[1].items():
