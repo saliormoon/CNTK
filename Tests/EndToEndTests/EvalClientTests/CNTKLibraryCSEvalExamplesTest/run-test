@@ -6,7 +6,7 @@ set -x
 
 # Since we only use python to train a model for evaluation test, it is sufficient to train the model only with one python version.
 # Now it is trained with Python 2.7. If it is not supported anymore, need to use another python version.
-PythonVer=$(python -c "import sys; print(sys.version_info[0])")
+PythonVer=$(python -c "import sys; sys.stdout.write(str(sys.version_info[0])); sys.stdout.flush()")
 if [ "$PythonVer" == "3" ]; then
   echo Skip this test for Python 3.4/3.5. Run this test only on Python 2.7 to save test time. 
   exit 0
