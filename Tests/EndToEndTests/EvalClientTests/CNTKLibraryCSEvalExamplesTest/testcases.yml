@@ -8,18 +8,6 @@ tags:
   - nightly-l ((build_sku == '1bitsgd') or (build_sku == 'cpu')) and (os == 'windows')
 
 testCases:
-  Test case EvaluateSingleImage:
-    patterns:
-      - Evaluate single image
-  Test case EvaluateBatchOfImages:
-    patterns:
-      - Evaluate batch of images
-  Test case EvaluateSingleSequenceUsingOneHotVector:
-    patterns:
-      - Evaluate single sequence using one-hot vector
-  Test case EvaluateBatchOfSequencesUsingOneHotVector:
-    patterns:
-      - Evaluate batch of sequences with variable length using one-hot vector
   Test run must be completed:
     patterns:
       - Evaluation completes
