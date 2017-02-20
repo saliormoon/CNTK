@@ -112,10 +112,7 @@ def train_and_evaluate(reader_train, reader_test, network_name, epoch_size, max_
             progress_printer.update_with_trainer(trainer, with_metric=True) # log progress
         progress_printer.epoch_summary(with_metric=True)
         if model_dir:
-            os.chdir(model_dir)
-            z.save(network_name + "_{}.dnn".format(epoch))
-            os.chdir(current_work_dir)
-            # z.save(os.path.join(model_dir, network_name + "_{}.dnn".format(epoch)))
+            z.save(os.path.join(model_dir, network_name + "_{}.dnn".format(epoch)))
         enable_profiler() # begin to collect profiler data after first epoch
 
     if profiler_dir:
@@ -159,12 +156,10 @@ if __name__=='__main__':
     epochs = int(args['epochs'])
     network_name = args['network']
 
-<<<<<<< f356c618bc0951d12afd6f4d459b69c96ea8707d
-=======
     model_dir = args['model_dir']
     if not model_dir:
         model_dir = os.path.join(abs_path, "Models")
->>>>>>> add train model on-the-fly for evaluation
+
     reader_train = create_reader(os.path.join(data_path, 'train_map.txt'), os.path.join(data_path, 'CIFAR-10_mean.xml'), True)
     reader_test  = create_reader(os.path.join(data_path, 'test_map.txt'), os.path.join(data_path, 'CIFAR-10_mean.xml'), False)
 

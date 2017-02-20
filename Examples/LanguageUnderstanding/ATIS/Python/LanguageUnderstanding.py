@@ -96,9 +96,7 @@ def train(reader, model, max_epochs, model_dir=None):
     #progress_printer = ProgressPrinter(tag='Training', num_epochs=max_epochs)
 
     t = 0
-    current_work_dir = os.getcwd()
-    print('the  current_work_dir is {}'.format(current_work_dir))
-    print('the model dir is {}'.format(model_dir))
+
     # loop over epochs
     for epoch in range(max_epochs):
         epoch_end = (epoch+1) * epoch_size
@@ -110,15 +108,6 @@ def train(reader, model, max_epochs, model_dir=None):
             trainer.train_minibatch(data)                                   # update model with it
             t += trainer.previous_minibatch_sample_count                    # count samples processed so far
             progress_printer.update_with_trainer(trainer, with_metric=True) # log progress
-            if model_dir:
-                os.chdir(model_dir)
-                z.save("atis" + "_{}.dnn".format(epoch))
-                os.chdir(current_work_dir)
-                #model_file = os.path.join(model_dir, "atis" + "_{}.dnn".format(epoch))
-                #print('model file name before norm is {}'.format(model_file))
-                #model_file = os.path.normpath(model_file)
-                #print('model file name after norm is {}'.format(model_file))
-                #z.save(model_file)
 
             #def trace_node(name):
             #    nl = [n for n in z.parameters if n.name() == name]
@@ -126,10 +115,12 @@ def train(reader, model, max_epochs, model_dir=None):
             #        print (name, np.asarray(nl[0].value))
             #trace_node('W')
             #trace_node('stabilizer_param')
-
+        if model_dir:
+            z.save(os.path.join(model_dir, "atis" + "_{}.dnn".format(epoch)))
         loss, metric, actual_samples = progress_printer.epoch_summary(with_metric=True)
- 
+
     return loss, metric
+
 
 #############################
 # main function boilerplate #
